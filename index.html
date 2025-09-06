@@ -217,6 +217,14 @@
             margin-bottom: 10px;
             font-size: 1.1rem;
         }
+        .debug-section {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #475569;
+        }
         @media (max-width: 768px) {
             .main-grid { grid-template-columns: 1fr; }
             .container { padding: 30px; }
@@ -272,6 +280,11 @@
                     <option value="large">Large Enterprise (500+ employees)</option>
                 </select>
             </div>
+
+            <div class="debug-section">
+                <h4>Score Breakdown:</h4>
+                <div id="score-breakdown"></div>
+            </div>
         </div>
 
         <div class="results-section">
@@ -300,7 +313,7 @@
             <div class="metric-card">
                 <div>Time-to-Fill</div>
                 <div class="metric-value" id="time-display">45 days</div>
-                <div>AI could reduce to <span id="ai-time">27 days</span></div>
+                <div id="ai-time-text">AI could reduce to <span id="ai-time">27 days</span></div>
             </div>
         </div>
     </div>
@@ -308,7 +321,6 @@
     <div class="recommendations-section">
         <h3>🎯 Your AI Opportunities</h3>
         <div class="recommendations-grid" id="recommendations-grid">
-            <!-- Will be populated by JavaScript -->
         </div>
     </div>
 
@@ -324,162 +336,141 @@
 </div>
 
 <script>
-    function calculateMetrics() {
-        const hires = parseInt(document.getElementById('hires-per-month').value) || 3;
-        const timeToFill = parseInt(document.getElementById('time-to-fill').value) || 45;
-        const badHireRate = parseInt(document.getElementById('bad-hire-rate').value) || 25;
-        const screeningTime = parseInt(document.getElementById('screening-time').value) || 12;
-        const hourlyRate = parseInt(document.getElementById('recruiter-hourly').value) || 25;
-        const companySize = document.getElementById('company-size').value;
-        
-        // Replacement costs by company size
-        const replacementCosts = {
-            'startup': 8000,
-            'small': 12000, 
-            'medium': 16000,
-            'large': 25000
-        };
-        const replacementCost = replacementCosts[companySize];
-        
-        // Calculate metrics
-        const monthlyScreeningCost = hires * screeningTime * hourlyRate;
-        const monthlyBadHireCost = hires * (badHireRate / 100) * replacementCost;
-        const aiTimeReduction = Math.max(20, Math.round(timeToFill * 0.6));
-        const screeningSavings = Math.round(monthlyScreeningCost * 0.75);
-        
-        // Calculate efficiency score (capped at 100)
-        const timeScore = Math.min(100, Math.max(0, 100 - ((timeToFill - 25) * 2)));
-        const badHireScore = Math.min(100, Math.max(0, 100 - (badHireRate * 4)));
-        const screeningScore = Math.min(100, Math.max(0, 100 - ((screeningTime - 6) * 8)));
-        const overallScore = Math.min(100, Math.round((timeScore + badHireScore + screeningScore) / 3));
-        
-        // Update score display with colors and text
-        const scoreElement = document.getElementById('efficiency-score');
-        const scoreTextElement = document.getElementById('score-text');
-        scoreElement.className = 'efficiency-score';
-        
-        if (overallScore < 50) {
-            scoreElement.classList.add('low');
-            scoreTextElement.textContent = 'Needs Significant Improvement';
-        } else if (overallScore <= 80) {
-            scoreElement.classList.add('medium');
-            scoreTextElement.textContent = 'Room for Improvement';
-        } else {
-            scoreElement.classList.add('high');
-            scoreTextElement.textContent = 'Excellent Performance';
-        }
-        
-        // Update display
-        document.getElementById('score-number').textContent = overallScore;
-        document.getElementById('monthly-screening-cost').textContent = '$' + monthlyScreeningCost.toLocaleString();
-        document.getElementById('screening-impact').textContent = screeningTime + ' hours × $' + hourlyRate + '/hour × ' + hires + ' hires';
-        document.getElementById('screening-savings').textContent = '$' + screeningSavings.toLocaleString() + '/month';
-        document.getElementById('bad-hire-cost').textContent = '$' + Math.round(monthlyBadHireCost).toLocaleString();
-        document.getElementById('bad-hire-impact').textContent = badHireRate + '% × ' + hires + ' hires × $' + (replacementCost/1000) + 'k replacement cost';
-        document.getElementById('time-display').textContent = timeToFill + ' days';
-        document.getElementById('ai-time').textContent = aiTimeReduction + ' days';
-        
-        // Update recommendations
-        updateRecommendations(screeningTime, badHireRate, timeToFill, screeningSavings, monthlyBadHireCost);
+function calculateMetrics() {
+    console.log('=== calculateMetrics started ===');
+    
+    const hires = parseInt(document.getElementById('hires-per-month').value) || 3;
+    const timeToFill = parseInt(document.getElementById('time-to-fill').value) || 45;
+    const badHireRate = parseFloat(document.getElementById('bad-hire-rate').value) || 0;
+    const screeningTime = parseInt(document.getElementById('screening-time').value) || 12;
+    const hourlyRate = parseInt(document.getElementById('recruiter-hourly').value) || 25;
+    const companySize = document.getElementById('company-size').value;
+    
+    console.log('Input values:', {hires, timeToFill, badHireRate, screeningTime, hourlyRate, companySize});
+    
+    // Replacement costs by company size
+    const replacementCosts = {
+        'startup': 8000,
+        'small': 12000, 
+        'medium': 16000,
+        'large': 25000
+    };
+    const replacementCost = replacementCosts[companySize];
+    
+    // Calculate metrics
+    const monthlyScreeningCost = hires * screeningTime * hourlyRate;
+    const monthlyBadHireCost = hires * (badHireRate / 100) * replacementCost;
+    const aiTimeReduction = Math.round(timeToFill * 0.6);
+    const screeningSavings = Math.round(monthlyScreeningCost * 0.75);
+    
+    // Calculate efficiency score components
+    const timeScore = Math.min(100, Math.max(0, 100 - ((timeToFill - 25) * 2)));
+    
+    let badHireScore;
+    if (badHireRate === 0) {
+        badHireScore = 100;
+        console.log('Bad hire rate is exactly 0, score = 100');
+    } else {
+        badHireScore = Math.min(100, Math.max(0, 100 - (badHireRate * 2)));
+        console.log('Bad hire rate is', badHireRate, ', calculated score =', badHireScore);
     }
     
-    function updateRecommendations(screeningTime, badHireRate, timeToFill, screeningSavings, monthlyBadHireCost) {
-        const grid = document.getElementById('recommendations-grid');
-        let recommendations = '';
-        
-        if (screeningTime > 10) {
-            recommendations += '<div class="recommendation-card"><h4>🤖 Automate Screening</h4><p>Save ' + Math.round(screeningTime * 0.75) + ' hours per hire with AI pre-qualification.</p><p><strong>Impact:</strong> $' + screeningSavings.toLocaleString() + '/month savings</p></div>';
-        }
-        
-        if (badHireRate > 15) {
-            recommendations += '<div class="recommendation-card"><h4>🎯 Predictive Matching</h4><p>Reduce bad hires with AI pattern analysis of successful employees.</p><p><strong>Impact:</strong> $' + Math.round(monthlyBadHireCost * 12 * 0.3).toLocaleString() + '/year potential savings</p></div>';
-        }
-        
-        if (timeToFill > 35) {
-            recommendations += '<div class="recommendation-card"><h4>⚡ Speed Up Matching</h4><p>Accelerate candidate matching with AI-powered job fit scoring.</p><p><strong>Impact:</strong> Reduce time-to-fill by ' + Math.round(timeToFill * 0.35) + ' days</p></div>';
-        }
-        
-        recommendations += '<div class="recommendation-card"><h4>💬 Candidate Experience</h4><p>Deploy AI chatbots for instant candidate communication and updates.</p><p><strong>Impact:</strong> 20-25% better candidate satisfaction</p></div>';
-        
-        grid.innerHTML = recommendations;
+    const screeningScore = Math.min(100, Math.max(0, 100 - ((screeningTime - 6) * 5)));
+    const overallScore = Math.round((timeScore + badHireScore + screeningScore) / 3);
+    
+    console.log('Score components:', {timeScore, badHireScore, screeningScore, overallScore});
+    
+    // Update score breakdown
+    document.getElementById('score-breakdown').innerHTML = 
+        `Time Score: ${timeScore} (${timeToFill} days)<br>` +
+        `Bad Hire Score: ${badHireScore} (${badHireRate}%)<br>` +
+        `Screening Score: ${screeningScore} (${screeningTime} hrs)<br>` +
+        `<strong>Overall: ${overallScore}</strong>`;
+    
+    // Update score display
+    const scoreElement = document.getElementById('efficiency-score');
+    const scoreTextElement = document.getElementById('score-text');
+    scoreElement.className = 'efficiency-score';
+    
+    if (overallScore < 50) {
+        scoreElement.classList.add('low');
+        scoreTextElement.textContent = 'Needs Significant Improvement';
+    } else if (overallScore <= 80) {
+        scoreElement.classList.add('medium');
+        scoreTextElement.textContent = 'Room for Improvement';
+    } else {
+        scoreElement.classList.add('high');
+        scoreTextElement.textContent = 'Excellent Performance';
     }
     
-    function showContact() {
-        const contactInfo = document.getElementById('contact-info');
-        contactInfo.style.display = contactInfo.style.display === 'none' ? 'block' : 'none';
+    // Update display
+    document.getElementById('score-number').textContent = overallScore;
+    document.getElementById('monthly-screening-cost').textContent = '$' + monthlyScreeningCost.toLocaleString();
+    document.getElementById('screening-impact').textContent = screeningTime + ' hours × $' + hourlyRate + '/hour × ' + hires + ' hires';
+    document.getElementById('screening-savings').textContent = '$' + screeningSavings.toLocaleString() + '/month';
+    document.getElementById('bad-hire-cost').textContent = '$' + Math.round(monthlyBadHireCost).toLocaleString();
+    document.getElementById('bad-hire-impact').textContent = badHireRate + '% × ' + hires + ' hires × $' + (replacementCost/1000) + 'k replacement cost';
+    document.getElementById('time-display').textContent = timeToFill + ' days';
+    
+    // Handle time-to-fill AI display with 21-day threshold
+    if (timeToFill > 21) {
+        document.getElementById('ai-time-text').innerHTML = 'AI could reduce to <span id="ai-time">21 days</span>';
+    } else {
+        document.getElementById('ai-time-text').innerHTML = '<span id="ai-time" style="color: #10b981; font-weight: bold;">Already optimized!</span>';
     }
     
-    function downloadReport() {
-        // Get current data
-        const hires = document.getElementById('hires-per-month').value;
-        const score = document.getElementById('score-number').textContent;
-        const scoreText = document.getElementById('score-text').textContent;
-        const screeningCost = document.getElementById('monthly-screening-cost').textContent;
-        const badHireCost = document.getElementById('bad-hire-cost').textContent;
-        const timeToFill = document.getElementById('time-display').textContent;
-        const screeningSavings = document.getElementById('screening-savings').textContent;
-        const aiTime = document.getElementById('ai-time').textContent;
-        const companySize = document.getElementById('company-size').selectedOptions[0].text;
-        const badHireRate = document.getElementById('bad-hire-rate').value;
-        const screeningTime = document.getElementById('screening-time').value;
-        
-        // Get score color class for styling
-        const scoreClass = document.getElementById('efficiency-score').classList.contains('high') ? 'high' : 
-                          document.getElementById('efficiency-score').classList.contains('medium') ? 'medium' : 'low';
-        
-        // Generate text report content
-        const reportText = `RECRUITMENT EFFICIENCY REPORT
-Generated: ${new Date().toLocaleDateString()}
-Company Size: ${companySize}
+    // Update recommendations
+    updateRecommendations(screeningTime, badHireRate, timeToFill, screeningSavings, monthlyBadHireCost);
+    
+    console.log('=== calculateMetrics completed ===');
+}
 
-EFFICIENCY SCORE: ${score}/100
-Status: ${scoreText}
-
-CURRENT PERFORMANCE METRICS:
-• Monthly Hires: ${hires}
-• Time-to-Fill: ${timeToFill}  
-• Monthly Screening Cost: ${screeningCost}
-• Bad Hire Impact: ${badHireCost}
-
-AI TRANSFORMATION OPPORTUNITIES:
-${screeningTime > 10 ? `• Automate Screening: Save ${Math.round(screeningTime * 0.75)} hours per hire with AI pre-qualification. Impact: ${screeningSavings}/month savings\n` : ''}${badHireRate > 15 ? `• Predictive Matching: Reduce bad hires with AI pattern analysis. Impact: $${Math.round(badHireCost.replace(/[$,]/g, '') * 12 * 0.3).toLocaleString()}/year potential savings\n` : ''}${timeToFill.replace(' days', '') > 35 ? `• Speed Up Matching: Accelerate matching with AI job fit scoring. Impact: Reduce time-to-fill by ${Math.round(timeToFill.replace(' days', '') * 0.35)} days\n` : ''}• Candidate Experience: Deploy AI chatbots for instant communication. Impact: 20-25% better satisfaction
-
-IMPLEMENTATION ROADMAP:
-Phase 1 (Month 1): Implement AI screening automation
-Phase 2 (Month 2): Deploy predictive matching algorithms  
-Phase 3 (Month 3): Roll out candidate experience chatbots
-Phase 4 (Ongoing): Continuous optimization and monitoring
-
-Ready to Transform Your Recruitment?
-Contact: CoberAI@hotmail.com
-Book your free 15-minute strategy call
-
-© 2024 CoberAI - Transforming Recruitment with AI`;
-
-        // Create and download text file
-        const element = document.createElement('a');
-        const file = new Blob([reportText], {type: 'text/plain'});
-        element.href = URL.createObjectURL(file);
-        element.download = `Recruitment-Report-${new Date().toISOString().split('T')[0]}.txt`;
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
-        URL.revokeObjectURL(element.href);
-        
-        alert('Report downloaded successfully!');
+function updateRecommendations(screeningTime, badHireRate, timeToFill, screeningSavings, monthlyBadHireCost) {
+    const grid = document.getElementById('recommendations-grid');
+    let recommendations = '';
+    
+    if (screeningTime > 10) {
+        const hoursSaved = screeningTime - 10;
+        recommendations += '<div class="recommendation-card"><h4>🤖 Automate Screening</h4><p>Save ' + hoursSaved + ' hours per hire with AI pre-qualification.</p><p><strong>Impact:</strong> $' + screeningSavings.toLocaleString() + '/month savings</p></div>';
     }
     
-    // Initialize and add event listeners
-    document.addEventListener('DOMContentLoaded', function() {
-        calculateMetrics();
-        
-        const inputs = document.querySelectorAll('input, select');
-        inputs.forEach(input => {
-            input.addEventListener('input', calculateMetrics);
-            input.addEventListener('change', calculateMetrics);
+    if (badHireRate > 15) {
+        recommendations += '<div class="recommendation-card"><h4>🎯 Predictive Matching</h4><p>Reduce bad hires with AI pattern analysis of successful employees.</p><p><strong>Impact:</strong> $' + Math.round(monthlyBadHireCost * 12 * 0.3).toLocaleString() + '/year potential savings</p></div>';
+    }
+    
+    if (timeToFill > 35) {
+        recommendations += '<div class="recommendation-card"><h4>⚡ Speed Up Matching</h4><p>Accelerate candidate matching with AI-powered job fit scoring.</p><p><strong>Impact:</strong> Reduce time-to-fill by ' + Math.round(timeToFill * 0.35) + ' days</p></div>';
+    }
+    
+    recommendations += '<div class="recommendation-card"><h4>💬 Candidate Experience</h4><p>Deploy AI chatbots for instant candidate communication and updates.</p><p><strong>Impact:</strong> 20-25% better candidate satisfaction</p></div>';
+    
+    grid.innerHTML = recommendations;
+}
+
+function showContact() {
+    const contactInfo = document.getElementById('contact-info');
+    contactInfo.style.display = contactInfo.style.display === 'none' ? 'block' : 'none';
+}
+
+function downloadReport() {
+    alert('Report download feature coming soon!');
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, setting up...');
+    calculateMetrics();
+    
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            console.log('Input changed:', input.id, '=', input.value);
+            calculateMetrics();
         });
     });
+    
+    console.log('Setup complete');
+});
 </script>
 </body>
 </html>
